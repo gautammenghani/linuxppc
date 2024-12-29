@@ -58,6 +58,7 @@ LIBPERF_0.0.1 {
 		perf_mmap__read_done;
 		perf_mmap__read_event;
 		perf_counts_values__scale;
+		PyInit_libperf;
 	local:
 		*;
 };

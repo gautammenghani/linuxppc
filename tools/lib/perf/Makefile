@@ -61,20 +61,28 @@ else
   CFLAGS := -g -Wall
 endif
 
+# Check Python.h path
+ifeq (,$(shell which python-config))
+	$(error "Consider installing python-dev or python-devel")
+endif
+
+PYTHON_INCLUDE = $(shell python-config --includes)
+
 INCLUDES = \
 -I$(srctree)/tools/lib/perf/include \
 -I$(srctree)/tools/lib/ \
 -I$(srctree)/tools/include \
 -I$(srctree)/tools/arch/$(SRCARCH)/include/ \
 -I$(srctree)/tools/arch/$(SRCARCH)/include/uapi \
--I$(srctree)/tools/include/uapi
+-I$(srctree)/tools/include/uapi \
+-I$(PYTHON_INCLUDE)
 
 # Append required CFLAGS
 override CFLAGS += $(EXTRA_WARNINGS)
 override CFLAGS += -Werror -Wall
 override CFLAGS += -fPIC
 override CFLAGS += $(INCLUDES)
-override CFLAGS += -fvisibility=hidden
+override CFLAGS += -fvisibility=hidden -Wno-redundant-decls
 
 all:
 
