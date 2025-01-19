@@ -15,8 +15,16 @@ static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *ar
 	return Py_BuildValue("O", pythread_map);
 }
 
+static PyObject *program_libperf_init(PyObject *self, PyObject *args)
+{
+       /* TODO: We need to figure out how to pass a function from python to libperf_init() */
+       libperf_init(NULL);
+       return Py_None;
+}
+
 PyMethodDef libperf_methods[] = {
 	{"perf_thread_map__new_dummy", program_perf_thread_map__new_dummy, METH_VARARGS, "Create a dummy thread map function variable"},
+	{"libperf_init", program_libperf_init, METH_VARARGS, "libperf init"},
 	{NULL, NULL, 0, NULL}
 };
 
