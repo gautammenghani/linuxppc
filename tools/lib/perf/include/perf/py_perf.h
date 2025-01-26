@@ -3,6 +3,7 @@
 #define __LIBPERF_PY_PERF_H
 
 #define PY_SSIZE_T_CLEAN
+#include <stdlib.h>
 #include <perf/threadmap.h>
 #include <Python.h>
 
@@ -13,6 +14,7 @@ typedef struct {
 
 static void py_perf_thread_map_dealloc(py_perf_thread_map *thread_map)
 {
+	free(thread_map->ptr);
 	Py_DECREF(thread_map);
 	PyObject_Del((PyObject *)thread_map);
 }

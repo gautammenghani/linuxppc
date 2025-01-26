@@ -11,6 +11,10 @@ static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *ar
 	py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
 
 	pythread_map->ptr = perf_thread_map__new_dummy();
+	if (!pythread_map->ptr) {
+		Py_DECREF(pythread_map);
+		return Py_None;
+	}
 
 	return Py_BuildValue("O", pythread_map);
 }
