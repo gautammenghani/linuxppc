@@ -19,10 +19,15 @@ static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *ar
 	return Py_BuildValue("O", pythread_map);
 }
 
+static int libperf_print(enum libperf_print_level level,
+			  const char *fmt, va_list ap)
+{
+	return vfprintf(stderr, fmt, ap);
+}
+
 static PyObject *program_libperf_init(PyObject *self, PyObject *args)
 {
-       /* TODO: We need to figure out how to pass a function from python to libperf_init() */
-       libperf_init(NULL);
+       libperf_init(libperf_print);
        return Py_None;
 }
 
