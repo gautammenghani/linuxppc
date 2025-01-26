@@ -8,7 +8,12 @@
 
 static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *args)
 {
-	py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
+	//py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
+	py_perf_thread_map *pythread_map = NULL;
+
+	if (!PyArg_ParseTuple(args, "O", &pythread_map)) {
+		return NULL;
+	}
 
 	pythread_map->ptr = perf_thread_map__new_dummy();
 	if (!pythread_map->ptr) {
