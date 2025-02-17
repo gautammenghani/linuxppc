@@ -1,19 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#include "include/perf/py_perf.h"
 #include <stdlib.h>
 #include <perf/threadmap.h>
-#include <perf/py_perf.h>
 #include <errno.h>
 #include <internal/threadmap.h>
+#include <perf/py_perf.h>
 
 static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *args)
 {
-	//py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
-	py_perf_thread_map *pythread_map = NULL;
-
-	if (!PyArg_ParseTuple(args, "O", &pythread_map)) {
-		return NULL;
-	}
+	py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
 
 	pythread_map->ptr = perf_thread_map__new_dummy();
 	if (!pythread_map->ptr) {
@@ -57,6 +51,8 @@ PyMODINIT_FUNC PyInit_libperf(void) {
 		return NULL;
 
 	python_push_type("py_perf_thread_map", m, &py_perf_thread_map_type);
+	python_push_type("py_atomic_t", m, &py_atomic_t_type);
+	python_push_type("py_refcount", m, &py_refcount_type);
 
 	return m;
 }
