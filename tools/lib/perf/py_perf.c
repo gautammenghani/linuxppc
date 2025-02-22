@@ -9,8 +9,8 @@ static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *ar
 {
 	py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
 
-	pythread_map->ptr = perf_thread_map__new_dummy();
-	if (!pythread_map->ptr) {
+	pythread_map->perf_tmap = perf_thread_map__new_dummy();
+	if (!pythread_map->perf_tmap) {
 		Py_DECREF(pythread_map);
 		return Py_None;
 	}
@@ -30,8 +30,22 @@ static PyObject *program_libperf_init(PyObject *self, PyObject *args)
        return Py_None;
 }
 
+static PyObject *program_perf_thread_map__set_pid(PyObject *self, PyObject *args)
+{
+	py_perf_thread_map *pythread_map = NULL;
+	int idx, pid;
+
+	if (!PyArg_ParseTuple(args, "Oii", &pythread_map, &idx, &pid)) {
+		return NULL;
+	}
+	perf_thread_map__set_pid(pythread_map->perf_tmap, idx, pid);
+
+	return Py_None;
+}
+
 PyMethodDef libperf_methods[] = {
 	{"perf_thread_map__new_dummy", program_perf_thread_map__new_dummy, METH_VARARGS, "Create a dummy thread map function variable"},
+	{"perf_thread_map__set_pid", program_perf_thread_map__set_pid, METH_VARARGS, "Set pid in the thread map"},
 	{"libperf_init", program_libperf_init, METH_VARARGS, "libperf init"},
 	{NULL, NULL, 0, NULL}
 };
