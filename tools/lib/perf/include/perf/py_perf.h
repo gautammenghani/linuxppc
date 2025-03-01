@@ -5,6 +5,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <stdlib.h>
 #include <linux/perf_event.h>
+#include <perf/evlist.h>
 #include <perf/evsel.h>
 #include <perf/threadmap.h>
 #include <Python.h>
@@ -34,14 +35,98 @@ static PyTypeObject py_perf_thread_map_type = {
 
 typedef struct {
 	PyObject_HEAD
-	struct perf_evlist *ptr;
+	struct perf_evlist *evlist;
 } py_perf_evlist;
 
 static void py_perf_evlist_dealloc(py_perf_evlist *evlist)
 {
-	free(evlist->ptr);
+	free(evlist->evlist);
 	Py_DECREF(evlist);
 	PyObject_Del((PyObject *)evlist);
+}
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *evlist;
+    size_t index;
+} evlist_iterator;
+
+static PyObject *
+evlist_iterator_new(PyTypeObject *type, PyObject *Py_UNUSED(args), PyObject *Py_UNUSED(kwds)) {
+	evlist_iterator* self;
+	self = (evlist_iterator *) type->tp_alloc(type, 0);
+	if (self != NULL) {
+		assert(!PyErr_Occurred());
+	}
+	return (PyObject *) self;
+}
+
+static int
+evlist_iterator_init(evlist_iterator *self, PyObject *args, PyObject *kwds) {
+    static char *kwlist[] = {"evlist", NULL};
+    PyObject *evlist = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &evlist)) {
+        return -1;
+    }
+
+    // Borrowed reference
+    // Keep the sequence alive as long as the iterator is alive.
+    // Decrement on iterator de-allocation.
+    Py_INCREF(evlist);
+    self->evlist = evlist;
+    self->index = 0;
+    return 0;
+}
+
+static void evlist_iterator_dealloc(evlist_iterator *self) {
+	// Decrement borrowed reference.
+	Py_XDECREF(self->evlist);
+	Py_TYPE(self)->tp_free((PyObject *) self);
+}
+
+static PyObject *evlist_iterator_next(evlist_iterator *self) {
+	struct perf_evsel *evsel;
+	struct perf_evlist *evlist = ((py_perf_evlist *)(self->evlist))->evlist;
+	int cnt = 0;
+	if (self->index < evlist->nr_entries) {
+		perf_evlist__for_each_evsel(evlist, evsel) {
+			if (cnt == self->index)
+				break;
+			cnt++;
+		}
+		self->index += 1;
+
+		//return (PyObject *) container_of(evsel, py_perf_evsel, evsel);
+	}
+	// End iteration.
+	return NULL;
+}
+
+static PyTypeObject evlist_iterator_type = {
+        PyVarObject_HEAD_INIT(NULL, 0)
+        .tp_name = "libperf.evlist_iterator_type",
+        .tp_basicsize = sizeof(evlist_iterator),
+        .tp_itemsize = 0,
+        .tp_dealloc = (destructor) evlist_iterator_dealloc,
+        .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+        .tp_doc = "evlist_iterator object.",
+        .tp_iter = PyObject_SelfIter,
+        .tp_iternext = (iternextfunc) evlist_iterator_next,
+        .tp_init = (initproc) evlist_iterator_init,
+        .tp_new = evlist_iterator_new,
+};
+
+static PyObject *py_perf_evlist_iter(py_perf_evlist *self) {
+	PyObject *ret = evlist_iterator_new(&evlist_iterator_type, NULL, NULL);
+	if (ret) {
+		PyObject *args = Py_BuildValue("(O)", self);
+		if (!args || evlist_iterator_init((evlist_iterator *) ret, args, NULL)) {
+			Py_DECREF(ret);
+			ret = NULL;
+		}
+		Py_DECREF(args);
+	}
+	return ret;
 }
 
 static PyTypeObject py_perf_evlist_type = {
@@ -50,6 +135,7 @@ static PyTypeObject py_perf_evlist_type = {
 	.tp_doc = "Perf evlist object",
 	.tp_basicsize = sizeof(py_perf_evlist),
 	.tp_dealloc = (destructor)py_perf_evlist_dealloc,
+	.tp_iter = (getiterfunc) py_perf_evlist_iter,
 	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 };
 

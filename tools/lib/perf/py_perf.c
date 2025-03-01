@@ -2,8 +2,6 @@
 #include "include/perf/py_perf.h"
 #include <stdlib.h>
 #include <perf/threadmap.h>
-#include <perf/evlist.h>
-#include <perf/evsel.h>
 #include <perf/py_perf.h>
 #include <errno.h>
 #include <internal/threadmap.h>
@@ -44,8 +42,8 @@ static PyObject *program_perf_evlist__new(PyObject *self, PyObject *args)
 {
 	py_perf_evlist *pyperf_evlist = PyObject_New(py_perf_evlist, &py_perf_evlist_type);
 
-	pyperf_evlist->ptr = perf_evlist__new();
-	if (!pyperf_evlist->ptr) {
+	pyperf_evlist->evlist = perf_evlist__new();
+	if (!pyperf_evlist->evlist) {
 		Py_DECREF(pyperf_evlist);
 		return Py_None;
 	}
@@ -86,7 +84,7 @@ static PyObject *program_perf_evlist__add(PyObject *self, PyObject *args)
 	//Py_INCREF(pyevlist);
 	//Py_INCREF(pyevsel);
 	evsel = (pyevsel == Py_None)? NULL: ((py_perf_evsel *)pyevsel)->ptr;
-	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->ptr;
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 	perf_evlist__add(evlist, evsel);
 
 	return Py_None;
@@ -106,7 +104,7 @@ static PyObject *program_perf_evlist__set_maps(PyObject *self, PyObject *args)
 	//Py_INCREF(pyevlist);
 	//Py_INCREF(pythread_map);
 	//Py_INCREF(pycpu_map);
-	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->ptr;
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 	cpu_map = (pycpu_map == Py_None)? NULL: ((py_perf_cpu_map *)pycpu_map)->ptr;
 	thread_map = (pythread_map == Py_None)? NULL: ((py_perf_thread_map *)pythread_map)->ptr;
 	perf_evlist__set_maps(evlist, cpu_map, thread_map);
@@ -126,9 +124,41 @@ static PyObject *program_perf_evlist__open(PyObject *self, PyObject *args)
 	//Py_INCREF(pyevlist);
 	//Py_INCREF(pythread_map);
 	//Py_INCREF(pycpu_map);
-	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->ptr;
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 
 	return Py_BuildValue("i", perf_evlist__open(evlist));
+}
+
+static PyObject *program_perf_evlist__enable(PyObject *self, PyObject *args)
+{
+	struct perf_evlist *evlist;
+	PyObject *pyevlist;
+
+	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
+		return NULL;
+	}
+
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
+
+	perf_evlist__enable(evlist);
+
+	return Py_None;
+}
+
+static PyObject *program_perf_evlist__disable(PyObject *self, PyObject *args)
+{
+	struct perf_evlist *evlist;
+	PyObject *pyevlist;
+
+	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
+		return NULL;
+	}
+
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
+
+	perf_evlist__disable(evlist);
+
+	return Py_None;
 }
 
 static int libperf_print(enum libperf_print_level level,
@@ -151,6 +181,8 @@ PyMethodDef libperf_methods[] = {
 	{"perf_evlist__add", program_perf_evlist__add, METH_VARARGS, "Add evsel to evlist"},
 	{"perf_evlist__set_maps", program_perf_evlist__set_maps, METH_VARARGS, "perf_evlist__set_maps"},
 	{"perf_evlist__open", program_perf_evlist__open, METH_VARARGS, "perf_evlist__set_maps"},
+	{"perf_evlist__enable", program_perf_evlist__enable, METH_VARARGS, "perf_evlist__enable"},
+	{"perf_evlist__disable", program_perf_evlist__disable, METH_VARARGS, "perf_evlist__disable"},
 	{"libperf_init", program_libperf_init, METH_VARARGS, "libperf init"},
 	{NULL, NULL, 0, NULL}
 };
