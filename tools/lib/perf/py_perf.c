@@ -56,12 +56,14 @@ static PyObject *program_perf_evlist__new(PyObject *self, PyObject *args)
 static PyObject *program_perf_evsel__new(PyObject *self, PyObject *args)
 {
 	struct perf_event_attr *attr;
+	PyObject *py_attr;
 	py_perf_evsel *pyperf_evsel = PyObject_New(py_perf_evsel, &py_perf_evsel_type);
 
-	if (!PyArg_ParseTuple(args, "O", &attr)) {
+	if (!PyArg_ParseTuple(args, "O", &py_attr)) {
 		return NULL;
 	}
 
+	attr = (py_attr == Py_None)? NULL: ((py_perf_event_attr *)py_attr)->attr;
 	pyperf_evsel->ptr = perf_evsel__new(attr);
 	if (!pyperf_evsel->ptr) {
 		Py_DECREF(pyperf_evsel);
