@@ -15,8 +15,8 @@ static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *ar
 		return NULL;
 	}*/
 
-	pythread_map->ptr = perf_thread_map__new_dummy();
-	if (!pythread_map->ptr) {
+	pythread_map->thread_map = perf_thread_map__new_dummy();
+	if (!pythread_map->thread_map) {
 		Py_DECREF(pythread_map);
 		return Py_None;
 	}
@@ -33,7 +33,7 @@ static PyObject *program_perf_thread_map__set_pid(PyObject *self, PyObject *args
 		return NULL;
 	}
 
-	perf_thread_map__set_pid(pythread_map->ptr, idx, pid);
+	perf_thread_map__set_pid(pythread_map->thread_map, idx, pid);
 
 	return Py_None;
 }
@@ -62,8 +62,8 @@ static PyObject *program_perf_evsel__new(PyObject *self, PyObject *args)
 	}
 
 	attr = (py_attr == Py_None)? NULL: ((py_perf_event_attr *)py_attr)->attr;
-	pyperf_evsel->ptr = perf_evsel__new(attr);
-	if (!pyperf_evsel->ptr) {
+	pyperf_evsel->evsel = perf_evsel__new(attr);
+	if (!pyperf_evsel->evsel) {
 		Py_DECREF(pyperf_evsel);
 		return Py_None;
 	}
@@ -83,7 +83,7 @@ static PyObject *program_perf_evlist__add(PyObject *self, PyObject *args)
 
 	//Py_INCREF(pyevlist);
 	//Py_INCREF(pyevsel);
-	evsel = (pyevsel == Py_None)? NULL: ((py_perf_evsel *)pyevsel)->ptr;
+	evsel = (pyevsel == Py_None)? NULL: ((py_perf_evsel *)pyevsel)->evsel;
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 	perf_evlist__add(evlist, evsel);
 
@@ -106,7 +106,7 @@ static PyObject *program_perf_evlist__set_maps(PyObject *self, PyObject *args)
 	//Py_INCREF(pycpu_map);
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 	cpu_map = (pycpu_map == Py_None)? NULL: ((py_perf_cpu_map *)pycpu_map)->ptr;
-	thread_map = (pythread_map == Py_None)? NULL: ((py_perf_thread_map *)pythread_map)->ptr;
+	thread_map = (pythread_map == Py_None)? NULL: ((py_perf_thread_map *)pythread_map)->thread_map;
 	perf_evlist__set_maps(evlist, cpu_map, thread_map);
 
 	return Py_None;
@@ -161,6 +161,71 @@ static PyObject *program_perf_evlist__disable(PyObject *self, PyObject *args)
 	return Py_None;
 }
 
+static PyObject *program_perf_evsel__read(PyObject *self, PyObject *args)
+{
+	PyObject *pyevsel, *pyperf_counts_values;
+	struct perf_evsel *evsel;
+	struct perf_counts_values *values;
+	int cpu_map_idx, thread;
+
+	if (!PyArg_ParseTuple(args, "OiiO", &pyevsel, &cpu_map_idx, &thread, &pyperf_counts_values)) {
+		return NULL;
+	}
+
+	evsel = (pyevsel == Py_None)? NULL: ((py_perf_evsel *)pyevsel)->evsel;
+	values = (pyevsel == Py_None)? NULL: ((py_perf_counts_values *)pyperf_counts_values)->values;
+
+	return Py_BuildValue("i", perf_evsel__read(evsel, cpu_map_idx, thread, values));
+}
+
+static PyObject *program_perf_evlist__close(PyObject *self, PyObject *args)
+{
+	struct perf_evlist *evlist;
+	PyObject *pyevlist;
+
+	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
+		return NULL;
+	}
+
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
+
+	perf_evlist__close(evlist);
+
+	return Py_None;
+}
+
+static PyObject *program_perf_evlist__delete(PyObject *self, PyObject *args)
+{
+	struct perf_evlist *evlist;
+	PyObject *pyevlist;
+
+	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
+		return NULL;
+	}
+
+	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
+
+	perf_evlist__delete(evlist);
+
+	return Py_None;
+}
+
+static PyObject *program_perf_thread_map__put(PyObject *self, PyObject *args)
+{
+	struct perf_thread_map *map;
+	PyObject *pyperf_thread_map;
+
+	if (!PyArg_ParseTuple(args, "O", &pyperf_thread_map)) {
+		return NULL;
+	}
+
+	map = (pyperf_thread_map == Py_None)? NULL: ((py_perf_thread_map *)pyperf_thread_map)->thread_map;
+
+	perf_thread_map__put(map);
+
+	return Py_None;
+}
+
 static int libperf_print(enum libperf_print_level level,
 			  const char *fmt, va_list ap)
 {
@@ -183,6 +248,10 @@ PyMethodDef libperf_methods[] = {
 	{"perf_evlist__open", program_perf_evlist__open, METH_VARARGS, "perf_evlist__set_maps"},
 	{"perf_evlist__enable", program_perf_evlist__enable, METH_VARARGS, "perf_evlist__enable"},
 	{"perf_evlist__disable", program_perf_evlist__disable, METH_VARARGS, "perf_evlist__disable"},
+	{"perf_evsel__read", program_perf_evsel__read, METH_VARARGS, "perf_evsel__read"},
+	{"perf_evlist__close", program_perf_evlist__close, METH_VARARGS, "perf_evlist__close"},
+	{"perf_evlist__delete", program_perf_evlist__delete, METH_VARARGS, "perf_evlist__delete"},
+	{"perf_thread_map__put", program_perf_thread_map__put, METH_VARARGS, "perf_thread_map__put"},
 	{"libperf_init", program_libperf_init, METH_VARARGS, "libperf init"},
 	{NULL, NULL, 0, NULL}
 };
@@ -203,11 +272,14 @@ PyMODINIT_FUNC PyInit_libperf(void) {
 
 	python_push_type("py_perf_thread_map", m, &py_perf_thread_map_type);
 	python_push_type("py_perf_evlist", m, &py_perf_evlist_type);
+	python_push_type("evlist_iterator", m, &evlist_iterator_type);
 	python_push_type("py_perf_evsel", m, &py_perf_evsel_type);
 	python_push_type("py_perf_cpu_map", m, &py_perf_cpu_map_type);
 	python_push_type("py_perf_event_attr", m, &py_perf_event_attr_type);
+	python_push_type("py_perf_counts_values", m, &py_perf_counts_values_type);
 
 	PyModule_AddObject(m, "perf_event_attr", (PyObject *) & py_perf_event_attr_type);
+	PyModule_AddObject(m, "perf_counts_values", (PyObject *) & py_perf_counts_values_type);
 
 	return m;
 }

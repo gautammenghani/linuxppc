@@ -5,19 +5,21 @@
 #define PY_SSIZE_T_CLEAN
 #include <stdlib.h>
 #include <linux/perf_event.h>
+#include <linux/kernel.h>
 #include <perf/evlist.h>
+#include <internal/evlist.h>
 #include <perf/evsel.h>
 #include <perf/threadmap.h>
 #include <Python.h>
 
 typedef struct {
 	PyObject_HEAD
-	struct perf_thread_map *ptr;
+	struct perf_thread_map *thread_map;
 } py_perf_thread_map;
 
 static void py_perf_thread_map_dealloc(py_perf_thread_map *thread_map)
 {
-	free(thread_map->ptr);
+	free(thread_map->thread_map);
 	Py_DECREF(thread_map);
 	PyObject_Del((PyObject *)thread_map);
 }
@@ -28,6 +30,28 @@ static PyTypeObject py_perf_thread_map_type = {
 	.tp_doc = "Perf thread map object",
 	.tp_basicsize = sizeof(py_perf_thread_map),
 	.tp_dealloc = (destructor)py_perf_thread_map_dealloc,
+	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+};
+
+// perf_evsel declarations
+typedef struct {
+	PyObject_HEAD
+	struct perf_evsel *evsel;
+} py_perf_evsel;
+
+static void py_perf_evsel_dealloc(py_perf_evsel *evsel)
+{
+	free(evsel->evsel);
+	Py_DECREF(evsel);
+	PyObject_Del((PyObject *)evsel);
+}
+
+static PyTypeObject py_perf_evsel_type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libperf.py_perf_evsel",
+	.tp_doc = "Perf evsel object",
+	.tp_basicsize = sizeof(py_perf_evsel),
+	.tp_dealloc = (destructor)py_perf_evsel_dealloc,
 	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 };
 
@@ -63,10 +87,14 @@ evlist_iterator_new(PyTypeObject *type, PyObject *Py_UNUSED(args), PyObject *Py_
 
 static int
 evlist_iterator_init(evlist_iterator *self, PyObject *args, PyObject *kwds) {
-    static char *kwlist[] = {"evlist", NULL};
-    PyObject *evlist = NULL;
+    //static char *kwlist[] = {"evlist", NULL};
+    PyObject *evlist;
+    /*
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &evlist)) {
         return -1;
+    }*/
+    if (!PyArg_ParseTuple(args, "O", &evlist)) {
+	    return -1;
     }
 
     // Borrowed reference
@@ -87,18 +115,22 @@ static void evlist_iterator_dealloc(evlist_iterator *self) {
 static PyObject *evlist_iterator_next(evlist_iterator *self) {
 	struct perf_evsel *evsel;
 	struct perf_evlist *evlist = ((py_perf_evlist *)(self->evlist))->evlist;
+	py_perf_evsel *pyperf_evsel = PyObject_New(py_perf_evsel, &py_perf_evsel_type);
 	int cnt = 0;
+
 	if (self->index < evlist->nr_entries) {
 		perf_evlist__for_each_evsel(evlist, evsel) {
-			if (cnt == self->index)
+			if (cnt == self->index) {
+				pyperf_evsel->evsel = evsel;
 				break;
+			}
 			cnt++;
 		}
 		self->index += 1;
 
-		//return (PyObject *) container_of(evsel, py_perf_evsel, evsel);
+		//return (PyObject *)container_of(&res, py_perf_evsel, evsel);
+		return (PyObject *) pyperf_evsel;
 	}
-	// End iteration.
 	return NULL;
 }
 
@@ -136,28 +168,6 @@ static PyTypeObject py_perf_evlist_type = {
 	.tp_basicsize = sizeof(py_perf_evlist),
 	.tp_dealloc = (destructor)py_perf_evlist_dealloc,
 	.tp_iter = (getiterfunc) py_perf_evlist_iter,
-	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-};
-
-// perf_evsel declarations
-typedef struct {
-	PyObject_HEAD
-	struct perf_evsel *ptr;
-} py_perf_evsel;
-
-static void py_perf_evsel_dealloc(py_perf_evsel *evsel)
-{
-	free(evsel->ptr);
-	Py_DECREF(evsel);
-	PyObject_Del((PyObject *)evsel);
-}
-
-static PyTypeObject py_perf_evsel_type = {
-	PyVarObject_HEAD_INIT(NULL, 0)
-	.tp_name = "libperf.py_perf_evsel",
-	.tp_doc = "Perf evsel object",
-	.tp_basicsize = sizeof(py_perf_evsel),
-	.tp_dealloc = (destructor)py_perf_evsel_dealloc,
 	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 };
 
@@ -387,6 +397,99 @@ static PyTypeObject py_perf_event_attr_type = {
 	.tp_getset = py_perf_event_attr_getset,
 };
 
+// perf_counts_values
+
+typedef struct {
+	PyObject_HEAD
+	struct perf_counts_values *values;
+} py_perf_counts_values;
+
+static void py_perf_counts_values_dealloc(py_perf_counts_values *values)
+{
+	free(values->values);
+	Py_DECREF(values);
+	PyObject_Del((PyObject *)values);
+}
+
+#define PYSTRUCT_GET_SET_FUNC_LONG(name, element)						\
+static PyObject *py_##name##_##element##_get(py_##name *self, void *closure)			\
+{												\
+	return PyLong_FromLong(self->values->element);						\
+}												\
+												\
+static int py_##name##_##element##_set(py_##name *self, PyObject *value, void *closure)		\
+{												\
+												\
+	if (!PyLong_Check(value))								\
+		return -1;									\
+												\
+	self->values->element = PyLong_AsLong(value);							\
+												\
+	return 0;										\
+}
+
+
+static PyObject * py_perf_counts_values_get_values(py_perf_counts_values *self, void *closure)
+{
+	PyObject *list = PyList_New(5);
+	if (!list)
+		return NULL;
+	for (int i = 0; i < 5; i++) {
+		PyList_SetItem(list, i, PyLong_FromLong(self->values->values[i]));
+	}
+	return list;
+}
+
+static int py_perf_counts_values_set_values(py_perf_counts_values *self, PyObject *value, void *closure)
+{
+	if (!PyLong_Check(value)) {
+		PyErr_SetString(PyExc_TypeError, "Values must be u64");
+		return -1;
+	}
+	for(int i = 0; i < 5; i++) {
+		self->values->values[i] = PyLong_AsLong(value);
+	}
+	return 0;
+}
+
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, val)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, ena)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, run)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, id)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, lost)
+
+static PyGetSetDef py_perf_counts_values_getsetters[] = {
+	GET_SET_DEF(perf_counts_values, val),
+	GET_SET_DEF(perf_counts_values, ena),
+	GET_SET_DEF(perf_counts_values, run),
+	GET_SET_DEF(perf_counts_values, id),
+	GET_SET_DEF(perf_counts_values, lost),
+	{"values", (getter)py_perf_counts_values_get_values, (setter)py_perf_counts_values_set_values,"values", NULL},
+    {NULL}
+};
+
+static PyObject *py_perf_counts_values_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+	py_perf_counts_values *self = (py_perf_counts_values *) type->tp_alloc(type, 0);
+
+	if (!self)
+		return NULL;
+
+	self->values = calloc(1, sizeof(struct perf_counts_values));
+
+	return (PyObject *)self;
+}
+
+static PyTypeObject py_perf_counts_values_type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name = "libperf.py_perf_counts_values",
+	.tp_doc = "Perf_counts_values object",
+	.tp_basicsize = sizeof(py_perf_counts_values),
+	.tp_new = py_perf_counts_values_new,
+	.tp_dealloc = (destructor)py_perf_counts_values_dealloc,
+	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+	.tp_getset = py_perf_counts_values_getsetters,
+};
 
 LIBPERF_API PyMODINIT_FUNC PyInit_libperf(void);
 
