@@ -41,7 +41,6 @@ typedef struct {
 
 static void py_perf_evsel_dealloc(py_perf_evsel *evsel)
 {
-	free(evsel->evsel);
 	Py_DECREF(evsel);
 	PyObject_Del((PyObject *)evsel);
 }
@@ -72,93 +71,53 @@ static void py_perf_evlist_dealloc(py_perf_evlist *evlist)
 typedef struct {
     PyObject_HEAD
     PyObject *evlist;
-    size_t index;
-} evlist_iterator;
+    struct list_head *current;
+} py_perf_evlist_iterator;
 
-static PyObject *
-evlist_iterator_new(PyTypeObject *type, PyObject *Py_UNUSED(args), PyObject *Py_UNUSED(kwds)) {
-	evlist_iterator* self;
-	self = (evlist_iterator *) type->tp_alloc(type, 0);
-	if (self != NULL) {
-		assert(!PyErr_Occurred());
-	}
-	return (PyObject *) self;
-}
+static PyObject *evlist_iterator_next(py_perf_evlist_iterator *iter) {
 
-static int
-evlist_iterator_init(evlist_iterator *self, PyObject *args, PyObject *kwds) {
-    //static char *kwlist[] = {"evlist", NULL};
-    PyObject *evlist;
-    /*
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &evlist)) {
-        return -1;
-    }*/
-    if (!PyArg_ParseTuple(args, "O", &evlist)) {
-	    return -1;
-    }
-
-    // Borrowed reference
-    // Keep the sequence alive as long as the iterator is alive.
-    // Decrement on iterator de-allocation.
-    Py_INCREF(evlist);
-    self->evlist = evlist;
-    self->index = 0;
-    return 0;
-}
-
-static void evlist_iterator_dealloc(evlist_iterator *self) {
-	// Decrement borrowed reference.
-	Py_XDECREF(self->evlist);
-	Py_TYPE(self)->tp_free((PyObject *) self);
-}
-
-static PyObject *evlist_iterator_next(evlist_iterator *self) {
-	struct perf_evsel *evsel;
-	struct perf_evlist *evlist = ((py_perf_evlist *)(self->evlist))->evlist;
 	py_perf_evsel *pyperf_evsel = PyObject_New(py_perf_evsel, &py_perf_evsel_type);
-	int cnt = 0;
+	struct list_head *head;
 
-	if (self->index < evlist->nr_entries) {
-		perf_evlist__for_each_evsel(evlist, evsel) {
-			if (cnt == self->index) {
-				pyperf_evsel->evsel = evsel;
-				break;
-			}
-			cnt++;
-		}
-		self->index += 1;
-
-		//return (PyObject *)container_of(&res, py_perf_evsel, evsel);
-		return (PyObject *) pyperf_evsel;
+	if (((py_perf_evlist *)(iter->evlist))->evlist == NULL) {
+		PyErr_SetString(PyExc_RuntimeError, "perf_evlist has been closed");
+		return NULL;
 	}
-	return NULL;
+
+	head = &((py_perf_evlist *)(iter->evlist))->evlist->entries;
+
+	if (iter->current == head) {
+		PyErr_SetNone(PyExc_StopIteration);
+		return NULL;
+	}
+
+	pyperf_evsel->evsel = list_entry(iter->current, struct perf_evsel, node);
+
+	iter->current = iter->current->next;
+
+	Py_INCREF(iter->evlist);
+	return (PyObject *)pyperf_evsel;
 }
 
-static PyTypeObject evlist_iterator_type = {
+static PyTypeObject py_perf_evlist_iterator_type = {
         PyVarObject_HEAD_INIT(NULL, 0)
         .tp_name = "libperf.evlist_iterator_type",
-        .tp_basicsize = sizeof(evlist_iterator),
+        .tp_basicsize = sizeof(py_perf_evlist_iterator),
         .tp_itemsize = 0,
-        .tp_dealloc = (destructor) evlist_iterator_dealloc,
         .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
         .tp_doc = "evlist_iterator object.",
         .tp_iter = PyObject_SelfIter,
         .tp_iternext = (iternextfunc) evlist_iterator_next,
-        .tp_init = (initproc) evlist_iterator_init,
-        .tp_new = evlist_iterator_new,
 };
 
 static PyObject *py_perf_evlist_iter(py_perf_evlist *self) {
-	PyObject *ret = evlist_iterator_new(&evlist_iterator_type, NULL, NULL);
-	if (ret) {
-		PyObject *args = Py_BuildValue("(O)", self);
-		if (!args || evlist_iterator_init((evlist_iterator *) ret, args, NULL)) {
-			Py_DECREF(ret);
-			ret = NULL;
-		}
-		Py_DECREF(args);
-	}
-	return ret;
+	py_perf_evlist_iterator *iter = PyObject_New(py_perf_evlist_iterator, &py_perf_evlist_iterator_type);
+	if (!iter)
+		return NULL;
+	iter->current = self->evlist->entries.next;
+	iter->evlist = (PyObject *)self;
+	Py_INCREF(self);
+	return (PyObject *)iter;
 }
 
 static PyTypeObject py_perf_evlist_type = {

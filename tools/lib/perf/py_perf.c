@@ -272,7 +272,7 @@ PyMODINIT_FUNC PyInit_libperf(void) {
 
 	python_push_type("py_perf_thread_map", m, &py_perf_thread_map_type);
 	python_push_type("py_perf_evlist", m, &py_perf_evlist_type);
-	python_push_type("evlist_iterator", m, &evlist_iterator_type);
+	python_push_type("evlist_iterator", m, &py_perf_evlist_iterator_type);
 	python_push_type("py_perf_evsel", m, &py_perf_evsel_type);
 	python_push_type("py_perf_cpu_map", m, &py_perf_cpu_map_type);
 	python_push_type("py_perf_event_attr", m, &py_perf_event_attr_type);
