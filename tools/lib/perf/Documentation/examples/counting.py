@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import sys
-sys.path.append('/home/gautam/work/github_repos/pp/linuxppc/tools/lib/perf/')
+sys.path.append('../../')
 from libperf import *
 
 # software ids
@@ -21,6 +21,8 @@ PERF_FORMAT_ID = 1 << 2
 PERF_FORMAT_GROUP = 1 << 3
 PERF_FORMAT_LOST = 1 << 4
 
+# Perf sample identifier
+PERF_SAMPLE_IDENTIFIER = 1 << 16
 
 def get_attr(config):
     attr = perf_event_attr()
@@ -29,7 +31,7 @@ def get_attr(config):
     attr.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED|PERF_FORMAT_TOTAL_TIME_RUNNING
     attr.disabled = 1
     attr.size = 136
-    attr.sample_type = (1 << 16) # PERF_SAMPLE_IDENTIFIER
+    attr.sample_type = PERF_SAMPLE_IDENTIFIER
     return attr
 
 libperf_init(None)
@@ -53,7 +55,7 @@ perf_evlist__add(evlist, evsel)
 perf_evlist__set_maps(evlist, None, threads)
 rc = perf_evlist__open(evlist)
 if rc != 0:
-    print("failed to open evsel: ",rc)
+    print("failed to open evsel: ", rc)
 
 perf_evlist__enable(evlist)
 
@@ -65,7 +67,7 @@ perf_evlist__disable(evlist)
 c = perf_counts_values()
 for sel  in evlist:
 		perf_evsel__read(sel, 0, 0, c);
-		print(f"count {c.val}, enabled {c.ena}, run {c.run}")
+		print("count %lu, enabled %lu, run %lu" %(c.val, c.ena, c.run))
 
 perf_evlist__close(evlist);
 perf_evlist__delete(evlist);

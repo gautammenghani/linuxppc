@@ -9,11 +9,6 @@
 static PyObject *program_perf_thread_map__new_dummy(PyObject *self, PyObject *args)
 {
 	py_perf_thread_map *pythread_map = PyObject_New(py_perf_thread_map, &py_perf_thread_map_type);
-	//py_perf_thread_map *pythread_map = NULL;
-
-	/*if (!PyArg_ParseTuple(args, "O", &pythread_map)) {
-		return NULL;
-	}*/
 
 	pythread_map->thread_map = perf_thread_map__new_dummy();
 	if (!pythread_map->thread_map) {
@@ -81,8 +76,6 @@ static PyObject *program_perf_evlist__add(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
-	//Py_INCREF(pyevlist);
-	//Py_INCREF(pyevsel);
 	evsel = (pyevsel == Py_None)? NULL: ((py_perf_evsel *)pyevsel)->evsel;
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 	perf_evlist__add(evlist, evsel);
@@ -101,11 +94,8 @@ static PyObject *program_perf_evlist__set_maps(PyObject *self, PyObject *args)
 		return NULL;
 	}
 
-	//Py_INCREF(pyevlist);
-	//Py_INCREF(pythread_map);
-	//Py_INCREF(pycpu_map);
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
-	cpu_map = (pycpu_map == Py_None)? NULL: ((py_perf_cpu_map *)pycpu_map)->ptr;
+	cpu_map = (pycpu_map == Py_None)? NULL: ((py_perf_cpu_map *)pycpu_map)->map;
 	thread_map = (pythread_map == Py_None)? NULL: ((py_perf_thread_map *)pythread_map)->thread_map;
 	perf_evlist__set_maps(evlist, cpu_map, thread_map);
 
@@ -120,10 +110,6 @@ static PyObject *program_perf_evlist__open(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
 		return NULL;
 	}
-
-	//Py_INCREF(pyevlist);
-	//Py_INCREF(pythread_map);
-	//Py_INCREF(pycpu_map);
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
 
 	return Py_BuildValue("i", perf_evlist__open(evlist));
@@ -139,7 +125,6 @@ static PyObject *program_perf_evlist__enable(PyObject *self, PyObject *args)
 	}
 
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
-
 	perf_evlist__enable(evlist);
 
 	return Py_None;
@@ -153,9 +138,7 @@ static PyObject *program_perf_evlist__disable(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
 		return NULL;
 	}
-
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
-
 	perf_evlist__disable(evlist);
 
 	return Py_None;
@@ -171,7 +154,6 @@ static PyObject *program_perf_evsel__read(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "OiiO", &pyevsel, &cpu_map_idx, &thread, &pyperf_counts_values)) {
 		return NULL;
 	}
-
 	evsel = (pyevsel == Py_None)? NULL: ((py_perf_evsel *)pyevsel)->evsel;
 	values = (pyevsel == Py_None)? NULL: ((py_perf_counts_values *)pyperf_counts_values)->values;
 
@@ -186,9 +168,7 @@ static PyObject *program_perf_evlist__close(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
 		return NULL;
 	}
-
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
-
 	perf_evlist__close(evlist);
 
 	return Py_None;
@@ -202,9 +182,7 @@ static PyObject *program_perf_evlist__delete(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "O", &pyevlist)) {
 		return NULL;
 	}
-
 	evlist = (pyevlist == Py_None)? NULL: ((py_perf_evlist *)pyevlist)->evlist;
-
 	perf_evlist__delete(evlist);
 
 	return Py_None;
@@ -218,9 +196,7 @@ static PyObject *program_perf_thread_map__put(PyObject *self, PyObject *args)
 	if (!PyArg_ParseTuple(args, "O", &pyperf_thread_map)) {
 		return NULL;
 	}
-
 	map = (pyperf_thread_map == Py_None)? NULL: ((py_perf_thread_map *)pyperf_thread_map)->thread_map;
-
 	perf_thread_map__put(map);
 
 	return Py_None;
@@ -259,7 +235,7 @@ PyMethodDef libperf_methods[] = {
 struct PyModuleDef libperf = {
 	PyModuleDef_HEAD_INIT,
 	"libperf",
-	"Create a dummy thread map function variable",
+	"Extension module to expose libperf to python",
 	-1,
 	libperf_methods
 };
