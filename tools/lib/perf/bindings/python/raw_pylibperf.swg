@@ -9,8 +9,37 @@
 #include <perf/core.h>
 #include <perf/event.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <linux/types.h>
 #include <sys/types.h>
+
+typedef uint32_t u32;
+typedef uint64_t u64;
+struct list_head {
+    struct list_head *next, *prev;
+};
+struct perf_evsel {
+	struct list_head	 node;
+	struct perf_event_attr	 attr;
+	struct perf_cpu_map	*cpus;
+	struct perf_cpu_map	*own_cpus;
+	struct perf_thread_map	*threads;
+	struct xyarray		*fd;
+	struct xyarray		*mmap;
+	struct xyarray		*sample_id;
+	u64			*id;
+	u32			 ids;
+	struct perf_evsel	*leader;
+
+	struct list_head	per_stream_periods;
+
+	int			 nr_members;
+	bool			 system_wide;
+	bool			 requires_cpu;
+	bool			 is_pmu_core;
+	int			 idx;
+};
 %}
 
 %include <stdint.i>
@@ -160,6 +189,29 @@ struct perf_counts_values {
 	};
 };
 
+struct perf_evsel {
+	struct list_head	 node;
+	struct perf_event_attr	 attr;
+	struct perf_cpu_map	*cpus;
+	struct perf_cpu_map	*own_cpus;
+	struct perf_thread_map	*threads;
+	struct xyarray		*fd;
+	struct xyarray		*mmap;
+	struct xyarray		*sample_id;
+	u64			*id;
+	u32			 ids;
+	struct perf_evsel	*leader;
+
+	struct list_head	per_stream_periods;
+
+	int			 nr_members;
+	bool			 system_wide;
+	bool			 requires_cpu;
+	bool			 is_pmu_core;
+	int			 idx;
+};
+
+
 // TODO: This is not the same as libperf defn
 void libperf_init(...);
 struct perf_thread_map *perf_thread_map__new_dummy(void);
@@ -174,4 +226,8 @@ int perf_evlist__open(struct perf_evlist *evlist);
 void perf_evlist__close(struct perf_evlist *evlist);
 void perf_evlist__enable(struct perf_evlist *evlist);
 void perf_evlist__disable(struct perf_evlist *evlist);
+struct perf_evsel* perf_evlist__next(struct perf_evlist *evlist, struct perf_evsel *evsel);
+int perf_evsel__read(struct perf_evsel *evsel, int cpu_map_idx, int thread, struct perf_counts_values *count);
+void perf_evlist__delete(struct perf_evlist *evlist);
+void perf_thread_map__put(struct perf_thread_map *map);
 
