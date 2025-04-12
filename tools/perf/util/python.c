@@ -626,6 +626,102 @@ static int pyrf_thread_map__setup_types(void)
 	return PyType_Ready(&pyrf_thread_map__type);
 }
 
+struct pyrf_counts_values {
+	PyObject_HEAD
+
+	struct perf_counts_values values;
+};
+
+static const char pyrf_counts_values__doc[] = PyDoc_STR("perf counts values object.");
+
+static void pyrf_counts_values__delete(struct pyrf_counts_values *pcounts_values)
+{
+	Py_TYPE(pcounts_values)->tp_free((PyObject*)pcounts_values);
+}
+
+static int pyrf_counts_values__init(struct pyrf_counts_values *pcounts_values,
+			    PyObject *args, PyObject *kwargs)
+{
+	return 0;
+}
+
+static PyObject * py_perf_counts_values_get_values(struct pyrf_counts_values *self, void *closure)
+{
+	PyObject *list = PyList_New(5);
+	if (!list)
+		return NULL;
+	for (int i = 0; i < 5; i++) {
+		PyList_SetItem(list, i, PyLong_FromLong(self->values.values[i]));
+	}
+	return list;
+}
+
+static int py_perf_counts_values_set_values(struct pyrf_counts_values *self, PyObject *value, void *closure)
+{
+	if (!PyLong_Check(value)) {
+		PyErr_SetString(PyExc_TypeError, "Values must be u64");
+		return -1;
+	}
+	for(int i = 0; i < 5; i++) {
+		self->values.values[i] = PyLong_AsLong(value);
+	}
+	return 0;
+}
+
+
+#define PYSTRUCT_GET_SET_FUNC_LONG(name, element)						\
+static PyObject *py_##name##_##element##_get(struct pyrf_counts_values *self, void *closure)			\
+{												\
+	return PyLong_FromLong(self->values.element);						\
+}												\
+												\
+static int py_##name##_##element##_set(struct pyrf_counts_values *self, PyObject *value, void *closure)		\
+{												\
+												\
+	if (!PyLong_Check(value))								\
+		return -1;									\
+												\
+	self->values.element = PyLong_AsLong(value);							\
+												\
+	return 0;										\
+}
+
+#define GET_SET_DEF(name, element)							\
+	{#element, (getter)py_##name##_##element##_get, (setter)py_##name##_##element##_set, NULL, NULL}
+
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, val)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, ena)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, run)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, id)
+PYSTRUCT_GET_SET_FUNC_LONG(perf_counts_values, lost)
+
+static PyGetSetDef pyrf_counts_values_getsetters[] = {
+	GET_SET_DEF(perf_counts_values, val),
+	GET_SET_DEF(perf_counts_values, ena),
+	GET_SET_DEF(perf_counts_values, run),
+	GET_SET_DEF(perf_counts_values, id),
+	GET_SET_DEF(perf_counts_values, lost),
+	{"values", (getter)py_perf_counts_values_get_values, (setter)py_perf_counts_values_set_values, "values", NULL},
+    {NULL}
+};
+
+static PyTypeObject pyrf_counts_values__type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	.tp_name	= "perf.counts_values",
+	.tp_basicsize	= sizeof(struct pyrf_counts_values),
+	.tp_dealloc	= (destructor)pyrf_counts_values__delete,
+	.tp_flags	= Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+	.tp_init	= (initproc)pyrf_counts_values__init,
+	.tp_doc		= pyrf_counts_values__doc,
+	.tp_getset = pyrf_counts_values_getsetters,
+};
+
+static int pyrf_counts_values__setup_types(void)
+{
+	pyrf_counts_values__type.tp_new = PyType_GenericNew;
+	return PyType_Ready(&pyrf_counts_values__type);
+}
+
 struct pyrf_evsel {
 	PyObject_HEAD
 
@@ -781,6 +877,23 @@ static PyObject *pyrf_evsel__open(struct pyrf_evsel *pevsel,
 	return Py_None;
 }
 
+static PyObject *pyrf_evsel__read(struct pyrf_evsel *pevsel,
+				  PyObject *args, PyObject *kwargs)
+{
+	struct evsel *evsel = &pevsel->evsel;
+	int cpu_map_idx = 0, thread = 0;
+	struct perf_counts_values counts;
+	struct pyrf_counts_values *count_values = PyObject_New(struct pyrf_counts_values, &pyrf_counts_values__type);
+
+	if (!PyArg_ParseTuple(args, "ii",
+					 &cpu_map_idx, &thread))
+		return NULL;
+
+	perf_evsel__read(&(evsel->core), 0, 0, &counts);
+	count_values->values = counts;
+	return (PyObject *)count_values;
+}
+
 static PyObject *pyrf_evsel__str(PyObject *self)
 {
 	struct pyrf_evsel *pevsel = (void *)self;
@@ -798,6 +911,12 @@ static PyMethodDef pyrf_evsel__methods[] = {
 		.ml_meth  = (PyCFunction)pyrf_evsel__open,
 		.ml_flags = METH_VARARGS | METH_KEYWORDS,
 		.ml_doc	  = PyDoc_STR("open the event selector file descriptor table.")
+	},
+	{
+		.ml_name  = "read",
+		.ml_meth  = (PyCFunction)pyrf_evsel__read,
+		.ml_flags = METH_VARARGS | METH_KEYWORDS,
+		.ml_doc	  = PyDoc_STR("read counters")
 	},
 	{ .ml_name = NULL, }
 };
@@ -1093,6 +1212,31 @@ static PyObject *pyrf_evlist__enable(struct pyrf_evlist *pevlist)
 	return Py_None;
 }
 
+static PyObject *pyrf_evlist__next(struct pyrf_evlist *pevlist,
+				   PyObject *args, PyObject *kwargs)
+{
+	struct evlist *evlist = &pevlist->evlist;
+	PyObject *py_evsel;
+	struct perf_evsel *pevsel;
+	struct evsel  *tmp;
+	struct pyrf_evsel *res = PyObject_New(struct pyrf_evsel, &pyrf_evsel__type);
+	static char *kwlist[] = { "evsel", NULL };
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", kwlist,
+					 &py_evsel))
+		return NULL;
+
+	pevsel = (py_evsel == Py_None)? NULL: &(((struct pyrf_evsel *)py_evsel)->evsel.core);
+	pevsel = perf_evlist__next(&(evlist->core), pevsel);
+	if (pevsel != NULL) {
+		tmp = container_of(pevsel, struct evsel, core);
+		res = container_of(tmp, struct pyrf_evsel, evsel);
+	} else {
+		return Py_None;
+	}
+	return (PyObject *) res;
+}
+
 static PyMethodDef pyrf_evlist__methods[] = {
 	{
 		.ml_name  = "all_cpus",
@@ -1151,8 +1295,14 @@ static PyMethodDef pyrf_evlist__methods[] = {
 	{
 		.ml_name  = "enable",
 		.ml_meth  = (PyCFunction)pyrf_evlist__enable,
-		.ml_flags = METH_NOARGS,
-		.ml_doc	  = PyDoc_STR("Enable the evsels in the evlist.")
+		.ml_flags = METH_VARARGS | METH_KEYWORDS,
+		.ml_doc	  = PyDoc_STR("Enable an event.")
+	},
+	{
+		.ml_name  = "next",
+		.ml_meth  = (PyCFunction)pyrf_evlist__next,
+		.ml_flags = METH_VARARGS | METH_KEYWORDS,
+		.ml_doc	  = PyDoc_STR("Return next evsel")
 	},
 	{ .ml_name = NULL, }
 };
@@ -1292,6 +1442,7 @@ static const struct perf_constant perf__constants[] = {
 	PERF_CONST(SAMPLE_PERIOD),
 	PERF_CONST(SAMPLE_STREAM_ID),
 	PERF_CONST(SAMPLE_RAW),
+	PERF_CONST(SAMPLE_IDENTIFIER),
 
 	PERF_CONST(FORMAT_TOTAL_TIME_ENABLED),
 	PERF_CONST(FORMAT_TOTAL_TIME_RUNNING),
@@ -1442,7 +1593,8 @@ PyMODINIT_FUNC PyInit_perf(void)
 	    pyrf_evlist__setup_types() < 0 ||
 	    pyrf_evsel__setup_types() < 0 ||
 	    pyrf_thread_map__setup_types() < 0 ||
-	    pyrf_cpu_map__setup_types() < 0)
+	    pyrf_cpu_map__setup_types() < 0 ||
+	    pyrf_counts_values__setup_types() < 0)
 		return module;
 
 	/* The page_size is placed in util object. */
@@ -1486,6 +1638,9 @@ PyMODINIT_FUNC PyInit_perf(void)
 
 	Py_INCREF(&pyrf_cpu_map__type);
 	PyModule_AddObject(module, "cpu_map", (PyObject*)&pyrf_cpu_map__type);
+
+	Py_INCREF(&pyrf_counts_values__type);
+	PyModule_AddObject(module, "counts_values", (PyObject*)&pyrf_counts_values__type);
 
 	dict = PyModule_GetDict(module);
 	if (dict == NULL)
